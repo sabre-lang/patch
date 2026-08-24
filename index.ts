@@ -137,6 +137,10 @@ class Session {
         const directory = await unzipper.Open.file(worker.zipfile);
         await directory.extract({ path: worker.extracted });
         await fse.rm(worker.zipfile); // remove the zip-file
+
+        // don't forget to chmod the executable we have
+        const extname = worker.asset.name.includes('windows') ? '.exe' : '';
+        await fse.chmod(path.join(worker.extracted, 'bin', `talos${extname}`), 0o755);
     }
 
     /**
