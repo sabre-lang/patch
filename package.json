@@ -1,6 +1,6 @@
 {
     "private": true,
-    "name": "replacer",
+    "name": "patch",
     "type": "module",
     "module": "index.ts",
     "devDependencies": {
