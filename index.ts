@@ -152,8 +152,8 @@ class Session {
         // prepare the required patches to be used
         const fileNames = worker.asset.name.includes('windows') ? ['install.ps1'] : ['install.sh'];
         const patches: Patch[] = fileNames.map((fileName) => ({
-            dst: path.join(dirname, fileName),
-            src: path.join(worker.extracted, 'scripts', fileName)
+            src: path.join(dirname, fileName),
+            dst: path.join(worker.extracted, 'scripts', fileName)
         }));
 
         // update all the files to be patched now
