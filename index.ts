@@ -190,11 +190,29 @@ class Session {
     private async m_upload(worker: Worker) {
         worker.task.output = `Uploading: ${worker.asset.name}`;
 
-        // upload the required archive (clobbering as needed)
+        // prepare the necessary streaming details
+        const stats = await fse.stat(worker.zipfile);
+        const stream = fse.createReadStream(worker.zipfile);
 
-        // and cleanup our resulting items now
-        await fse.rm(worker.zipfile, { force: true });
-        await fse.rm(worker.extracted, { recursive: true, force: true });
+        // delete the original release asset
+        await this.m_instance.repos.deleteReleaseAsset({
+            owner: this.m_owner,
+            repo: this.m_repo,
+            asset_id: worker.asset.id
+        });
+
+        // upload the required archive (clobbering as needed)
+        await this.m_instance.repos.uploadReleaseAsset({
+            owner: this.m_owner,
+            repo: this.m_repo,
+            data: stream as any,
+            name: worker.asset.name,
+            release_id: worker.parent.id,
+            headers: {
+                'Content-Type': 'application/zip',
+                'Content-Length': stats.size
+            }
+        });
     }
 
     /**
@@ -206,7 +224,7 @@ class Session {
         await this.m_unpack(worker); // extract contents
         await this.m_patch(worker); // replace items
         await this.m_archive(worker); // archive contents
-        // await this.m_upload(worker); // upload result
+        await this.m_upload(worker); // upload result
     }
 
     /**
