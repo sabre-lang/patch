@@ -1,0 +1,19 @@
+{
+    "private": true,
+    "name": "replacer",
+    "type": "module",
+    "module": "index.ts",
+    "devDependencies": {
+        "@octokit/rest": "^22.0.1",
+        "@types/archiver": "^8.0.0",
+        "@types/bun": "latest",
+        "@types/fs-extra": "^11.0.4",
+        "@types/node": "^26.2.0",
+        "@types/unzipper": "^0.10.11",
+        "archiver": "^8.0.0",
+        "fs-extra": "^11.4.0",
+        "listr2": "^11.0.0",
+        "typescript": "^7.0.2",
+        "unzipper": "^0.12.5"
+    }
+}
