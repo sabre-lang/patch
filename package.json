@@ -1,6 +1,6 @@
 {
     "private": true,
-    "name": "patch",
+    "name": "@talos/patch",
     "type": "module",
     "module": "index.ts",
     "devDependencies": {

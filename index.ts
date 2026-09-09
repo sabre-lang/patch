@@ -60,7 +60,7 @@ class Session {
     //  PROPERTIES  //
 
     readonly m_owner = 'rroessler';
-    readonly m_repo = 'langs.talos';
+    readonly m_repo = 'talos-lang';
     readonly m_auth = process.env.GITHUB_ACCESS_TOKEN;
     readonly m_instance = new Octokit({ auth: this.m_auth });
     readonly m_listr = new listr.Listr<any>([], { concurrent: true });
