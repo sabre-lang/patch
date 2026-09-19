@@ -1,8 +1,11 @@
 {
     "private": true,
-    "name": "@talos/patch",
+    "name": "@sabre/patch",
     "type": "module",
     "module": "index.ts",
+    "scripts": {
+        "start": "bun run ."
+    },
     "devDependencies": {
         "@octokit/rest": "^22.0.1",
         "@types/archiver": "^8.0.0",

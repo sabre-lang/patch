@@ -20,6 +20,12 @@ interface Asset {
     readonly name: string;
 }
 
+/** Patching Options. */
+interface Options {
+    readonly dry: boolean;
+    readonly archive: boolean;
+}
+
 /** Patch Typing. */
 interface Patch {
     readonly src: string;
@@ -47,7 +53,7 @@ class Worker {
     constructor(
         readonly task: Task,
         readonly asset: Asset,
-        readonly parent: Release
+        readonly parent: Release,
     ) {
         this.dirname = path.resolve(__dirname, 'assets', this.parent.tag_name);
         this.zipfile = path.join(this.dirname, this.asset.name);
@@ -59,11 +65,14 @@ class Worker {
 class Session {
     //  PROPERTIES  //
 
-    readonly m_owner = 'rroessler';
-    readonly m_repo = 'talos-lang';
+    readonly m_repo = 'sabre';
+    readonly m_owner = 'sabre-lang';
     readonly m_auth = process.env.GITHUB_ACCESS_TOKEN;
     readonly m_instance = new Octokit({ auth: this.m_auth });
     readonly m_listr = new listr.Listr<any>([], { concurrent: true });
+
+    /** Internal options to be used. */
+    readonly m_options: Options;
 
     //  GETTERS x SETTERS  //
 
@@ -77,6 +86,16 @@ class Session {
         return this.m_repo;
     }
 
+    //  CONSTRUCTORS  //
+
+    /** Receives incoming options for the session. */
+    constructor() {
+        this.m_options = {
+            dry: process.argv.includes('--dry'),
+            archive: process.argv.includes('--archive'),
+        };
+    }
+
     //  PUBLIC METHODS  //
 
     /** Handles launching the session */
@@ -84,8 +103,11 @@ class Session {
         // get the available releases
         const releases = await this.m_instance.repos.listReleases({
             repo: this.m_repo,
-            owner: this.m_owner
+            owner: this.m_owner,
         });
+
+        // if we are doing a dry-run then only list the releases found
+        if (this.m_options.dry) return this.m_info(releases.data);
 
         // pre-clean our outputs directory
         await fse.rm(path.resolve(__dirname, 'assets'), { recursive: true, force: true });
@@ -94,12 +116,34 @@ class Session {
         await new listr.Listr(
             releases.data.map((release) => ({
                 title: `Release: ${release.tag_name}`,
-                task: (_, task) => this.m_dispatch(task, release)
-            }))
+                task: (_, task) => this.m_dispatch(task, release),
+            })),
         ).run();
     }
 
     //  PRIVATE METHODS  //
+
+    /**
+     * Handles showing what releases would be targeted.
+     * @param releases              Releases to target.
+     */
+    private m_info(releases: Release[]) {
+        for (const release of releases) {
+            console.info(`Found Release '${release.tag_name}'`);
+            for (const asset of release.assets) {
+                const state = this.m_ignore(asset) ? 'ignore' : 'target';
+                console.info(`  - ${asset.name} (${state})`); // show asset
+            }
+        }
+    }
+
+    /**
+     * Ignore if we have a mismatch in assets.
+     * @param asset                 Asset to check.
+     */
+    private m_ignore(asset: Asset) {
+        return this.m_options.archive != asset.name.startsWith('talos');
+    }
 
     /**
      * Handle downloading release assets.
@@ -118,7 +162,7 @@ class Session {
             repo: this.m_repo,
             asset_id: worker.asset.id,
             headers: { accept: 'application/octet-stream' },
-            request: { parseSuccessResponseBody: false }
+            request: { parseSuccessResponseBody: false },
         });
 
         // download the incoming asset to be revised
@@ -138,9 +182,10 @@ class Session {
         await directory.extract({ path: worker.extracted });
         await fse.rm(worker.zipfile); // remove the zip-file
 
-        // don't forget to chmod the executable we have
+        // don't forget to chmod the executable we have as well
+        const name = worker.asset.name.includes('sabre') ? 'sabre' : 'talos';
         const extname = worker.asset.name.includes('windows') ? '.exe' : '';
-        await fse.chmod(path.join(worker.extracted, 'bin', `talos${extname}`), 0o755);
+        await fse.chmod(path.join(worker.extracted, 'bin', `${name}${extname}`), 0o755);
     }
 
     /**
@@ -154,10 +199,11 @@ class Session {
         const dirname = path.resolve(__dirname, 'patches');
 
         // prepare the required patches to be used
+        const basename = worker.asset.name.includes('sabre') ? 'sabre' : 'talos';
         const fileNames = worker.asset.name.includes('windows') ? ['install.ps1'] : ['install.sh'];
         const patches: Patch[] = fileNames.map((fileName) => ({
-            src: path.join(dirname, fileName),
-            dst: path.join(worker.extracted, 'scripts', fileName)
+            src: path.join(dirname, basename, fileName),
+            dst: path.join(worker.extracted, 'scripts', fileName),
         }));
 
         // update all the files to be patched now
@@ -202,7 +248,7 @@ class Session {
         await this.m_instance.repos.deleteReleaseAsset({
             owner: this.m_owner,
             repo: this.m_repo,
-            asset_id: worker.asset.id
+            asset_id: worker.asset.id,
         });
 
         // upload the required archive (clobbering as needed)
@@ -214,8 +260,8 @@ class Session {
             release_id: worker.parent.id,
             headers: {
                 'Content-Type': 'application/zip',
-                'Content-Length': stats.size
-            }
+                'Content-Length': stats.size,
+            },
         });
     }
 
@@ -236,12 +282,19 @@ class Session {
      * @param parent               Release to update.
      */
     private m_dispatch(task: Task, parent: Release) {
+        // filter all the assets that can be targeted now
+        const assets = parent.assets.filter((asset) => !this.m_ignore(asset));
+
+        // if there are no assets, then stop handling immediately
+        if (!assets.length) return task.skip();
+
+        // and the return the resulting task list to be used
         return task.newListr(
-            parent.assets.map((asset) => ({
+            assets.map((asset) => ({
                 title: `Asset File: ${asset.name}`,
-                task: async (_, task) => this.m_worker(new Worker(task, asset, parent))
+                task: async (_, task) => this.m_worker(new Worker(task, asset, parent)),
             })),
-            { concurrent: true }
+            { concurrent: true },
         );
     }
 }
